@@ -1,0 +1,171 @@
+!----------!
+!- Module -!
+!----------!
+module mesh
+! number of cells
+integer, parameter :: nb_cell = 3
+! number of degree of freedom
+integer, parameter :: dof = nb_cell+1
+! initial left and right values
+real, parameter :: u_left = 2.
+real, parameter :: u_right = 1.
+! initial position of the step
+real, parameter :: x_step = 0.5
+! length and discretization parameters
+real, parameter :: L = 1.
+real, parameter :: delta_x = L / nb_cell
+real, parameter :: delta_t = 0.1
+integer, parameter :: p = 1
+real, parameter :: Jwx = 0.5*delta_x
+end module
+!-----------!
+!- Program -!
+!-----------!
+program array
+use mesh
+use lin_sol_gen_int
+implicit none
+! interface
+interface
+! test function
+function phi(x,i)
+real phi
+real, intent(in) :: x
+integer, intent(in) :: i
+end function phi
+! flux function
+function flux(u,flux_type)
+real flux
+real, intent(in) :: u
+character(len=6), intent(in) :: flux_type
+end function flux
+! Weight and quadrature points
+subroutine quad_pts_and_weight(p, xq, wq)
+integer, intent(in) :: p
+real, dimension (p+1,1), intent(out) :: xq, wq
+end subroutine
+! Compute mass matrix
+subroutine mass_matrix(p,nb_cell,xq,wq,Jwx,M)
+integer, intent(in) :: p,nb_cell
+real, intent(in) :: Jwx
+real, dimension(p+1,1), intent(in) :: xq,wq
+real, dimension(p*nb_cell+1,p*nb_cell*1), intent(out) :: M
+end subroutine mass_matrix
+end interface
+! Declare variables: matrix and vectors
+real, dimension(dof,dof) :: Mass
+real, dimension(dof,1) :: U,Uold,Uolder,residual_stt,residual_stt_old,X
+integer i_var,j_var, q_var, AllocateStatus
+real sum
+! Declare vectors storing quadrature potins and weights
+real, dimension(p+1,1) :: xq, wq
+! Loop to set the initial values
+do i_var = 1,dof,1
+   X(i_var,1)=(i_var-1)*delta_x
+   if (X(i_var,1)<x_step) then 
+      U(i_var,1)=u_left
+   else
+      U(i_var,1)=u_right
+   endif
+   X(i_var,1)=(i_var-1)*delta_x
+end do
+Uold=U
+Uolder=U
+! Call the subroutine to get the quadrature points and weights
+call quad_pts_and_weight(p,xq,wq)
+print *, p
+print *, xq
+print *, wq
+print *, dof
+print *, nb_cell
+! Print U and X
+print *, U
+print *, X
+print *, Mass
+! Test function
+print *, phi(xq(1,1),1)
+print *, phi(xq(2,1),1)
+print *, phi(xq(1,1),2)
+print *, phi(xq(2,1),2)
+! Compute mass matrix
+Mass(:,:)=0.
+print *, Mass
+call mass_matrix(p,nb_cell,xq,wq,Jwx,Mass)
+do i_var = 1,dof,1
+   do j_var = 1,dof,1
+      print *, "Mass(",i_var,",",j_var,")=", Mass(i_var,j_var)
+   end do
+end do
+! Output kernel
+!do i_var = 1,nb_cell,1
+!   do j_var = 1,nb_cell,1
+!   print *, "kernel=", kernel(i_var,j_var)
+!   end do
+!end do
+end program array
+! test function
+function phi(x,i)
+implicit none
+real phi
+real, intent(in) :: x
+integer, intent(in) :: i
+if ( i == 1 ) then
+phi=0.5*(1-x)
+else if (i==2) then
+phi=0.5*(1+x)
+else
+print *, "Wrong integer"
+stop
+end if
+end function phi
+! flux function
+function flux(u,flux_type)
+implicit none
+real flux
+real, intent(in) :: u
+character(len=6), intent(in) :: flux_type
+select case (flux_type)
+case ("burger")
+flux=0.5*u*u
+case ("linear")
+flux=u
+case default
+print *, "Error: the flux type provided in function 'flux' is not implemented"
+stop
+end select
+end function flux
+! weight and quadrature points
+subroutine quad_pts_and_weight(p,xq,wq)
+implicit none
+integer, intent(in) :: p
+real, dimension(p+1,1), intent(out) :: xq, wq
+integer i_var
+do i_var=1,p+1,1
+   wq(i_var,1)=1
+end do
+xq(1,1)=-1./sqrt(3.)
+xq(2,1)=1./sqrt(3.)
+end subroutine
+! mass matrix
+subroutine mass_matrix(p,nb_cell,xq,wq,Jwx,M)
+implicit none
+integer, intent(in) :: p,nb_cell
+real, intent(in) :: Jwx
+real, dimension(p+1,1), intent(in) :: xq,wq
+real, dimension(p*nb_cell+1,p*nb_cell+1), intent(out) :: M
+integer row_var,col_var,i_var,j_var,q_var,dof
+real sum,phi
+print *, Jwx
+dof=p*nb_cell+1
+do row_var=1,nb_cell,p
+   do j_var=1,p+1,1
+      do i_var=1,p+1,1
+         sum=0.
+         do q_var=1,p+1,1
+            sum=sum + wq(q_var,1)*phi(xq(q_var,1),i_var)*phi(xq(q_var,1),j_var)*Jwx
+         end do
+         M(row_var+i_var-1,row_var+j_var-1)=M(row_var+i_var-1,row_var+j_var-1)+sum
+      end do
+   end do
+end do
+end subroutine mass_matrix
