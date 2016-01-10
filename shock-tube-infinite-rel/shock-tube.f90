@@ -9,7 +9,7 @@ implicit real*8(a-h,l-z)
 !     ieq = number of equations to solve in each fluid:
 !              1- alpha, 2- rho, 3- rho*u, 4- rho*E)
 !     ifl = number of fluids (restricted to 2 in the present version)
-      integer(kind=4), parameter :: im=102, ieq=4, ifl=2
+      integer(kind=4), parameter :: im=202, ieq=4, ifl=2
 !
       integer(kind=8), parameter :: neq = ifl*ieq*(im-2)
 !
@@ -76,7 +76,7 @@ implicit real*8(a-h,l-z)
 !~~~~~~~~~~~~~~~~~~~~ INPUT DATA  ~~~~~~~~~~~~~~~~~~~~~
 !     kmax   : number of time steps
 !     kprint : printing frequency
-      integer(kind=8), parameter:: kmax=20000000
+      integer(kind=8), parameter:: kmax=30000000 ! no longer used
       integer(kind=8) :: kprint=10000
 !
 !     initial time step size:
@@ -87,36 +87,36 @@ implicit real*8(a-h,l-z)
 !     CFL used for the computations
 !       Normally cfl is set to 0.5d0, but may need to
 !       be smaller if relaxation is turned on (irelax=1).
-      double precision :: cfl=0.05d0
+      double precision :: cfl=0.00001d0
 !
 !     irelax=0 --> no relaxation is used
 !     irelax=1 --> finite rate relaxation is used
       integer(kind=4), parameter:: irelax=1
 !
 !     Water-vapor stiffened gas EOS parameters; double precision
-      double precision :: gamma1=2.35d0,pinf1=1.d9,cv1=1816.d0  ! water
-      double precision :: gamma2=1.43d0,pinf2=0.d0,cv2=1040.d0  ! vapor
-      double precision :: q1 = -1167.0d3, qp1 =   0.0d0         ! water
-      double precision :: q2 =  2030.0d3, qp2 = -23.0d3         ! vapor
+      double precision :: gamma1=3.d0,pinf1=0.d0,cv1=0.5d0  ! water
+      double precision :: gamma2=1.4d0,pinf2=0.d0,cv2=2.5d0  ! vapor
+      double precision :: q1 =  0.0d0, qp1 =   0.0d0         ! water
+      double precision :: q2 =  0.0d0, qp2 = 0.0d0         ! vapor
 !
 !     Initialization of a few constants:
 !       temps = time; updated each time step in subroutine Use_BruteForce_Method
 !       cmax  = maximum wave speed in the entire domain (used for CFL);
 !               updated each time step in subroutine Derv
-      double precision :: cmax=0.d0,temps=0.d0
+      double precision :: cmax=0.d0,temps=0.d0,temps_end=305.d-6
 !
 !~~~~~~~~~~~~~~~~~~ GEOMETRY ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 !     tube length
-      double precision :: ltube=2.d0
+      double precision :: ltube=1.d0
 !
 !     dx= constant cell spacing, set in subroutine Init
       double precision :: dx
 !
 !     Indexes for the geometric junctions: 
       integer(kind=4), parameter:: idisc1=26 ! index at which the first segment ends
-      integer(kind=4), parameter:: idisc2=51 ! index at which the second segment ends
-      integer(kind=4), parameter:: idisc3=76 ! index at which the third segment ends
-      integer(kind=4), parameter:: idisc4=102 ! index at which the fourth segment ends
+      integer(kind=4), parameter:: idisc2=101 ! index at which the second segment ends
+      integer(kind=4), parameter:: idisc3=176 ! index at which the third segment ends
+      integer(kind=4), parameter:: idisc4=202 ! index at which the fourth segment ends
 !
 !     Inlet and outlet cross sections for the each segment, 1 to 4:
 !       sent = inlet cross-sectional area
@@ -191,7 +191,10 @@ implicit real*8(a-h,l-z)
 !  Time loop begins
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 !
-   do k=1,kmax
+!   do k=1,kmax
+  k = 0
+  do while (temps<temps_end)
+  k = k + 1
 !
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 !     Initialize rhs array
@@ -241,6 +244,9 @@ implicit real*8(a-h,l-z)
 !   Time step calculation
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
      dt=cfl*dx/cmax
+     if (temps+dt>temps_end) then
+       dt = temps_end-temps
+     endif
      temps=temps+dt
 
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -260,6 +266,7 @@ implicit real*8(a-h,l-z)
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 !  End of the time loop
    end do
+   print*,'iter',k, 'time',temps, 'dt',dt, 'cmax', cmax
 !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
    return
@@ -338,7 +345,7 @@ implicit real*8(a-h,l-z)
          qL    = q1
          qR    = q1
 !        rho0=1361.d0  ! tank density
-         rho0=1000.d0  ! tank density
+         rho0=10.d0    ! tank density
          p0  =10.d5    ! tank pressure
 !      get ustar, pstar, Eulerian flux at inlet face with 1,1 arrangement
          call inlet_BC(ieq,im,ifl,kfL,kfR,rho0,p0,t,prim,  &
@@ -356,7 +363,7 @@ implicit real*8(a-h,l-z)
          qL    = q2
          qR    = q2
 !         rho0=1.d0    ! tank density
-         rho0=5.4766d0    ! tank density
+         rho0=1.d0    ! tank density
          p0  =10.d5   ! tank pressure
 !     get ustar, pstar, Eulerian flux at inlet face with 2,2 arrangement
          call inlet_BC(ieq,im,ifl,kfL,kfR,rho0,p0,t,prim,  &
@@ -377,7 +384,7 @@ implicit real*8(a-h,l-z)
          qL    = q1
          qR    = q2
 !        rho0=1361.d0  ! tank density
-         rho0=1000.d0  ! tank density
+         rho0=10.d0  ! tank density
          p0  =10.d5    ! tank pressure
 !     get ustar, pstar, Eulerian flux at inlet face with 1,2 arrangement
          call inlet_BC(ieq,im,ifl,kfL,kfR,rho0,p0,t,prim,  &
@@ -386,17 +393,17 @@ implicit real*8(a-h,l-z)
 !        print*,'ustar LIQ 12',ustar
 !
 !     get Lagrangian flux at inlet face with 1,2 arrangement
-         flag(1,1,1,2) = -ustar
+         flag(1,1,1,2) = 0.d0 ! -ustar
          flag(2,1,1,2) = 0.d0
          flag(3,1,1,2) = pstar
-         flag(4,1,1,2) = pstar*ustar
+         flag(4,1,1,2) = 0.d0 ! pstar*ustar
 
 !*****************************
 ! 
 !       CONTACT  21
 !   Prescribed pressure at the INLET
          kfL = 2
-         kfR =  1
+         kfR = 1
          gammaL= gamma2
          gammaR= gamma1
          pinfL = pinf2
@@ -404,7 +411,7 @@ implicit real*8(a-h,l-z)
          qL    = q2
          qR    = q1
 !         rho0=1.d0     ! tank density
-         rho0=5.4766d0     ! tank density
+         rho0=1.d0     ! tank density
          p0  =10.d5    ! tank pressure
 !     get ustar, pstar, Eulerian flux at inlet face with 2,1 arrangement
          call inlet_BC(ieq,im,ifl,kfL,kfR,rho0,p0,t,prim,  &
@@ -413,10 +420,10 @@ implicit real*8(a-h,l-z)
 !        print*,'ustar GAS 21',ustar
 !
 !     get Lagrangian flux at inlet face with 2,1 arrangement
-         flag(1,1,2,1) = -ustar
+         flag(1,1,2,1) = 0.d0 ! -ustar
          flag(2,1,2,1) = 0.d0
          flag(3,1,2,1) = pstar
-         flag(4,1,2,1) = pstar*ustar
+         flag(4,1,2,1) = 0.d0 ! pstar*ustar
 
 !*****************************
 !    Set inlet boundary volume fractions
@@ -471,7 +478,7 @@ implicit real*8(a-h,l-z)
 !       liquid
          kfL = 1
          kfR = 1
-         pstar = 5.d5
+         pstar = 1.d5
 !         pstar = 9.7d5
 !   get rhostar, ustar, estar, Eulerian flux at outlet face with 1,1 arrangement
          call outlet_BC(ieq,im,ifl,kfL,kfR,prim,gamma1,pinf1,q1,pstar, &
@@ -481,7 +488,7 @@ implicit real*8(a-h,l-z)
 !       gas
          kfL = 2
          kfR = 2
-         pstar = 5.d5
+         pstar = 1.d5
 !         pstar = 9.7d5
 !   get rhostar, ustar, estar, Eulerian flux at outlet face with 2,2 arrangement
          call outlet_BC(ieq,im,ifl,kfL,kfR,prim,gamma2,pinf2,q2,pstar, &
@@ -493,7 +500,7 @@ implicit real*8(a-h,l-z)
          kfL = 1
          kfR = 2
          j = im-1
-         pstar = 5.d5
+         pstar = 1.d5
 !         pstar = 9.7d5
 !   get rhostar, ustar, estar, Eulerian flux at outlet face with 1,2 arrangement
          call outlet_BC(ieq,im,ifl,kfL,kfR,prim,gamma1,pinf1,q1,pstar, &
@@ -511,7 +518,7 @@ implicit real*8(a-h,l-z)
          kfL = 2
          kfR = 1
          j = im-1
-         pstar = 5.d5
+         pstar = 1.d5
 !         pstar = 9.7d5
 !   get rhostar, ustar, estar, Eulerian flux at outlet face with 2,1 arrangement
          call outlet_BC(ieq,im,ifl,kfL,kfR,prim,gamma2,pinf2,q2,pstar, &
@@ -798,12 +805,12 @@ implicit real*8(a-h,l-z)
 !      6.75*(alpha**2)*(1-alpha)
 !   This function, concave down, with peak of approximately 1 at alpha=2/3
 !   which goes to zero at alpha=0 and at alpha=1.
-!      ssvmax = 1700.d0
-      ssvmax = 50.d0
+      ssvmax = 1700.d0
+!      ssvmax = 50.d0
 !      ssvmax = 0.d0
       vert_offset = 0.d0
-!      ssv    = ssvmax*6.75d0*alphak(2)*alphak(2)*alphak(1)
-	  ssv    = ssvmax*4.d0*alphak(1)*alphak(2) - vert_offset
+      ssv    = ssvmax*6.75d0*alphak(2)*alphak(2)*alphak(1)
+!	  ssv    = ssvmax*4.d0*alphak(1)*alphak(2) - vert_offset
 	  if (ssv.lt.0.d0) ssv=0.d0
 !
 !   Specify or compute pressure and velocity relaxation coefficients	
@@ -1274,30 +1281,30 @@ use global_data
 !    LEFT STATE (first segment)
 !    fluid 1
        prim0l(1,1) = 0.5d0
-       prim0l(2,1) = 1000.d0
-       prim0l(3,1) = -0.d0
-       prim0l(4,1) = 5.d5
+       prim0l(2,1) = 10.d0
+       prim0l(3,1) = 0.d0
+       prim0l(4,1) = 10.d5
 !       prim0l(4,1) = 9.7d5
 !    fluid 2 
        prim0l(1,2) = 0.5d0
 !       prim0l(2,2) = 1.d0
-       prim0l(2,2) = 0.54816d0
-       prim0l(3,2) = -0.d0
-       prim0l(4,2) = 5.d5
+       prim0l(2,2) = 1.d0
+       prim0l(3,2) = 0.d0
+       prim0l(4,2) = 10.d5
 !       prim0l(4,2) = 9.7d5
 !    RIGHT STATE (second segment)
 !    fluid 1
        prim0r(1,1) = 0.5d0
-       prim0r(2,1) = 1000.d0
-       prim0r(3,1) = -0.d0
-       prim0r(4,1) = 5.d5
+       prim0r(2,1) = 10.d0
+       prim0r(3,1) = 0.d0
+       prim0r(4,1) = 1.d5
 !       prim0r(4,1) = 9.7d5
 !    fluid 2
        prim0r(1,2) = 0.5d0
 !       prim0r(2,2) = 1.d0
-       prim0r(2,2) = 0.54816d0
-       prim0r(3,2) = -0.d0
-       prim0r(4,2) = 5.d5
+       prim0r(2,2) = 1.d0
+       prim0r(3,2) = 0.d0
+       prim0r(4,2) = 1.d5
 !       prim0r(4,2) = 9.7d5
 !
 !   Conservative variable vectors
@@ -1402,18 +1409,18 @@ use global_data
           surfent(i) = dsdx4*xent+sent4
           surfsort(i)= dsdx4*xsort+sent4
         enddo
-      goto 100
+!      goto 100
 ! SMOOTH COSINE NOZZLE	
 !... nozzle area multiplier coefficient, and set PI
-        area0 = 1.d-2
+        area0 = 1.d0
         PI    = 4.0D0*DATAN(1.0D0)
 
 !... Grid Spacing, node positions, and cell-edge areas
       do i=1,im
         xent = xx(i)-dx/2.d0
         xsort= xx(i)+dx/2.d0
-        surfent(i) = area0*(1.D0+0.5D0*DCOS(xent*2.d0*PI))
-        surfsort(i)= area0*(1.D0+0.5D0*DCOS(xsort*2.d0*PI))
+        surfent(i) = 1. ! area0*(1.D0+0.5D0*DCOS(xent*2.d0*PI))
+        surfsort(i)= 1. ! area0*(1.D0+0.5D0*DCOS(xsort*2.d0*PI))
 !        surfent(i) = area0*(1.D0+0.5D0*DCOS(xent*1.d0*PI))
 !        surfsort(i)= area0*(1.D0+0.5D0*DCOS(xsort*1.d0*PI))
       enddo
@@ -1541,28 +1548,28 @@ implicit none
          if (dabs(ff) .LT. 1.d-6) goto 25
          ustar = ustar - ff/df
 !
-         if (ustar.Lt.0.d0) then
-            write(6,'(a)')'Inlet fluid: convergence failure'
+!         if (ustar.Lt.0.d0) then
+!            write(6,'(a)')'Inlet fluid: convergence failure'
 !            print*, 'kfL= ', kfL, 'kfR= ', kfR
 !            print*, 'ustar= ', ustar, 'ff= ', ff
 !            print*, 'pr= ', pr, 'ur= ', ur, 'rhor= ', rhor
 !	     print*, 'dk= ', dk, 'dh= ', dh
-         endif
+!         endif
 !
       enddo
 25    CONTINUE
 
-      pstar   = pr-zr*(ur-ustar)
+      pstar   = pr ! -zr*(ur-ustar)
       rhostar = rho0*((pstar+pinfL)/(p0+pinfL))**(1.d0/gammaL)
       prim(2,1,kfr) = 2.d0*rhostar - prim(2,2,kfr)
       prim(3,1,kfr) = 2.d0*ustar - prim(3,2,kfr)
       prim(4,1,kfr) = 2.d0*pstar - prim(4,2,kfr)
       f(1,1,kfL,kfR) = 0.d0
-      f(2,1,kfL,kfR) = rhostar*ustar
-      f(3,1,kfL,kfR) = rhostar*ustar**2+pstar
+      f(2,1,kfL,kfR) = 0.d0 ! rhostar*ustar
+      f(3,1,kfL,kfR) = pstar ! rhostar*ustar**2+pstar
       call eospe(rhostar,pstar,gammaL,pinfL,qL,estar)
-      f(4,1,kfL,kfR) = rhostar*ustar*(estar+ustar**2/2.d0) &
-                      +pstar*ustar
+      f(4,1,kfL,kfR) = 0.d0 ! rhostar*ustar*(estar+ustar**2/2.d0) &
+                      !+pstar*ustar
 
 return
 END SUBROUTINE inlet_BC
@@ -1610,7 +1617,7 @@ implicit none
 !         pstar  = 1.d5
 !         pstar  = 9.7d5
          rhostar= rhol+(pstar-pl)/cl**2
-         ustar  = (pl-pstar)/zl+ul
+         ustar  = 0.d0 ! (pl-pstar)/zl+ul
          call eospe(rhostar,pstar,gamma1,pinf1,q1,estar)
          prim(2,im,kf1) = 2.d0*rhostar - prim(2,im-1,kf1)
          prim(3,im,kf1) = 2.d0*ustar - prim(3,im-1,kf1)
